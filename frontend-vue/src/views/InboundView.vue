@@ -1,32 +1,39 @@
 <script setup lang="ts">
-/**
- * ============================================
- *  入库管理页 — 候选人需要实现（任务1）
- * ============================================
- *
- * 需求：
- * 1. 表单：供应商名称 + 入库明细列表
- * 2. 每行明细：选择商品（下拉搜索）→ 选择仓库 → 选择库位 → 输入数量
- * 3. 支持添加/删除明细行
- * 4. 提交按钮（调用 createInboundOrder API）
- *
- * 建议使用 AI 协作完成此页面，参考 ProductsView.vue 的实现风格
- */
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { createInboundOrder } from '@/api'
+import { createInboundOrder, getProducts, getWarehouses, getLocations, Product, Warehouse, Location } from '@/api'
 
 const supplierName = ref('')
 const items = ref<any[]>([])
 const submitting = ref(false)
 
-// TODO: 候选人实现添加/删除明细行的逻辑
+const products = ref<Product[]>([])
+const warehouses = ref<Warehouse[]>([])
+
+onMounted(async () => {
+  try {
+    const [pRes, wRes] = await Promise.all([
+      getProducts(),
+      getWarehouses()
+    ])
+    if (pRes.code === 200) {
+      products.value = pRes.data
+    }
+    if (wRes.code === 200) {
+      warehouses.value = wRes.data
+    }
+  } catch (e) {
+    ElMessage.error('加载基础数据失败')
+  }
+})
 
 const addItem = () => {
   items.value.push({
     productId: undefined,
-    quantity: 1,
+    warehouseId: undefined,
     locationCode: '',
+    quantity: 1,
+    locations: [] // 用于存储该行选中的仓库对应的库位列表
   })
 }
 
@@ -34,17 +41,64 @@ const removeItem = (index: number) => {
   items.value.splice(index, 1)
 }
 
-// TODO: 候选人实现提交逻辑
+const handleWarehouseChange = async (val: number, index: number) => {
+  items.value[index].locationCode = ''
+  items.value[index].locations = []
+  if (!val) return
+  
+  try {
+    const res = await getLocations(val)
+    if (res.code === 200) {
+      items.value[index].locations = res.data
+    }
+  } catch (e) {
+    ElMessage.error('加载库位失败')
+  }
+}
+
 const handleSubmit = async () => {
-  // 提示：调用 createInboundOrder({ supplierName, items })
+  if (!supplierName.value) {
+    ElMessage.warning('请输入供应商名称')
+    return
+  }
+  
+  for (let i = 0; i < items.value.length; i++) {
+    const item = items.value[i]
+    if (!item.productId) return ElMessage.warning(`第 ${i + 1} 行请选择商品`)
+    if (!item.locationCode) return ElMessage.warning(`第 ${i + 1} 行请选择库位`)
+    if (!item.quantity || item.quantity <= 0) return ElMessage.warning(`第 ${i + 1} 行数量必须大于0`)
+  }
+
+  submitting.value = true
+  try {
+    const payload = {
+      supplierName: supplierName.value,
+      items: items.value.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        locationCode: item.locationCode
+      }))
+    }
+    const res = await createInboundOrder(payload)
+    if (res.code === 201 || res.code === 200) {
+      ElMessage.success('入库单创建成功')
+      supplierName.value = ''
+      items.value = []
+    } else {
+      ElMessage.error(res.message || '创建失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '服务器内部错误')
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
 <template>
   <div>
-    <h3> 入库管理</h3>
+    <h3>入库管理</h3>
 
-    <!-- 表单 — 候选人实现 -->
     <el-form label-width="100px" style="max-width: 800px">
       <el-form-item label="供应商名称" required>
         <el-input v-model="supplierName" placeholder="请输入供应商名称" />
@@ -55,19 +109,28 @@ const handleSubmit = async () => {
       </el-form-item>
     </el-form>
 
-    <!-- 明细列表 — 候选人实现 -->
     <div v-for="(item, index) in items" :key="index" style="margin-bottom: 12px; display: flex; gap: 12px; align-items: center">
-      <!-- TODO: 商品下拉选择 -->
-      <!-- TODO: 仓库下拉 → 库位级联选择 -->
-      <!-- TODO: 数量输入 -->
+      <el-select v-model="item.productId" placeholder="选择商品" filterable style="width: 200px">
+        <el-option v-for="p in products" :key="p.id" :label="p.name + ' (' + p.sku + ')'" :value="p.id" />
+      </el-select>
+
+      <el-select v-model="item.warehouseId" placeholder="选择仓库" @change="(val: number) => handleWarehouseChange(val, index)" style="width: 150px">
+        <el-option v-for="w in warehouses" :key="w.id" :label="w.name" :value="w.id" />
+      </el-select>
+
+      <el-select v-model="item.locationCode" placeholder="选择库位" style="width: 150px">
+        <el-option v-for="loc in item.locations" :key="loc.code" :label="loc.code" :value="loc.code" />
+      </el-select>
+
+      <el-input-number v-model="item.quantity" :min="1" placeholder="数量" style="width: 120px" />
+
       <el-button type="danger" size="small" @click="removeItem(index)">删除</el-button>
     </div>
 
-    <!-- 提交按钮 -->
-    <el-button type="success" :loading="submitting" @click="handleSubmit" :disabled="items.length === 0">
+    <el-button type="success" :loading="submitting" @click="handleSubmit" :disabled="items.length === 0" style="margin-top: 20px">
       提交入库单
     </el-button>
 
-    <el-empty v-if="items.length === 0" description="请点击"添加明细"按钮添加入库商品" />
+    <el-empty v-if="items.length === 0" description="请点击“添加明细”按钮添加入库商品" />
   </div>
 </template>
