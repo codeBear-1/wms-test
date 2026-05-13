@@ -38,14 +38,20 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- H2 内存数据库（开发阶段，可随时切换 MySQL） -->
+        <!-- SQLite 本地文件持久化 -->
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.47.2.0</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- Hibernate 6 SQLite 方言（随 Spring Boot 管理的 Hibernate 版本对齐） -->
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-community-dialects</artifactId>
+        </dependency>
 
-        <!-- MySQL 驱动（如需切换，取消注释） -->
+        <!-- MySQL 驱动（如需切换，移除 SQLite 改为 MySQL） -->
         <!--
         <dependency>
             <groupId>com.mysql</groupId>

@@ -1,5 +1,13 @@
 # ====== Java / Maven ======
 target/
+backend-java/data/*.db
+backend-java/data/*.db-*
+backend-java/data/*.sqlite
+backend-java/data/*.sqlite3
+backend-java/*.db
+backend-java/*.db-*
+backend-java/*.sqlite
+backend-java/*.sqlite3
 *.class
 *.jar
 *.war
