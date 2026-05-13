@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final com.wms.repository.InventoryRepository inventoryRepository;
 
     public List<ProductResponse> list(String keyword) {
         List<Product> products = productRepository.search(keyword);
@@ -67,10 +68,11 @@ public class ProductService {
 
     @Transactional
     public void delete(Long id) {
-        // ️ BUG 预埋点：没有校验该商品是否有关联库存
-        // 候选人需要在任务3中发现并修复此问题
         if (!productRepository.existsById(id)) {
             throw new BusinessException(404, "商品不存在");
+        }
+        if (inventoryRepository.existsByProductId(id)) {
+            throw new BusinessException(400, "该商品存在关联库存，无法删除");
         }
         productRepository.deleteById(id);
         log.info("删除商品: id={}", id);
